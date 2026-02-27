@@ -1,0 +1,804 @@
+{
+  "name": "GRID - Revisão Gramatical de PDFs",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "Coloque seu ID aqui",
+          "mode": "list",
+          "cachedResultName": "GRID",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/Coloque-seu-ID-aqui"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        -896,
+        -256
+      ],
+      "id": "90c09227-674d-42cb-96d4-31122a86c9bb",
+      "name": "Google Drive Trigger",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Coloque sua credencial aqui",
+          "name": "Google Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -448,
+        -64
+      ],
+      "id": "e9c825d4-0d03-4094-9c76-edad58751947",
+      "name": "Wait",
+      "webhookId": "889eb0ea-bef1-4e3d-85ec-9fc515e6320f"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "body": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        80,
+        112
+      ],
+      "id": "dfbffdff-d915-46cc-8f0c-e21fbdc34cde",
+      "name": "Revisão Gramatical",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Coloque sua credencial aqui",
+          "name": "Google Places API Key"
+        },
+        "anthropicApi": {
+          "id": "Coloque sua credencial aqui",
+          "name": "Anthropic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const binaryData = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst pdf_base64 = binaryData.toString('base64');\n\nreturn [{\n  json: {\n    body: {\n      model: \"claude-sonnet-4-6\",\n      max_tokens: 4096,\n      messages: [\n        {\n          role: \"user\",\n          content: [\n            {\n              type: \"document\",\n              source: {\n                type: \"base64\",\n                media_type: \"application/pdf\",\n                data: pdf_base64\n              }\n            },\n            {\n              type: \"text\",\n              text: `Você é um revisor gramatical especializado em português brasileiro.\n\nAnalise este PDF slide por slide e identifique todos os erros gramaticais, ortográficos, de concordância e pontuação.\n\nRetorne EXCLUSIVAMENTE um JSON válido, sem texto adicional, sem markdown, sem blocos de código. Use EXATAMENTE esta estrutura:\n\n{\n  \"revisao_gramatical\": {\n    \"documento\": \"nome do documento analisado\",\n    \"resumo\": {\n      \"total_slides_analisados\": 0,\n      \"total_erros_encontrados\": 0,\n      \"slides_com_erros\": 0,\n      \"slides_sem_erros\": 0\n    },\n    \"slides\": [\n      {\n        \"slide\": 1,\n        \"titulo\": \"titulo do slide ou null\",\n        \"data\": \"data do slide ou null\",\n        \"erros\": [\n          {\n            \"id\": 1,\n            \"tipo_erro\": \"tipo do erro\",\n            \"texto_original\": \"texto com erro\",\n            \"correcao_sugerida\": \"texto corrigido\",\n            \"explicacao\": \"explicação do erro\"\n          }\n        ]\n      }\n    ]\n  }\n}\n\nSe um slide não tiver erros, retorne \"erros\": []. O campo \"resumo\" é obrigatório e deve refletir os totais reais.`\n            }\n          ]\n        }\n      ]\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        112
+      ],
+      "id": "7a9f1a1a-b8e0-4a8d-b6fd-34bd13f109cb",
+      "name": "Extrair Base64"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "ecb2fa7b-e1c8-4f46-9eea-cdde32e51e44",
+      "name": "Download PDF",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -752,
+        -256
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Coloque sua credencial aqui",
+          "name": "Google Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst rawText = response.content[0].text;\n\n// Limpeza agressiva do markdown\nlet cleanText = rawText\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\n// Se ainda houver backticks no meio, extrai só o JSON\nconst jsonMatch = cleanText.match(/\\{[\\s\\S]*\\}/);\nif (jsonMatch) {\n  cleanText = jsonMatch[0];\n}\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleanText);\n} catch (e) {\n  parsed = { raw: rawText, parse_error: true };\n}\n\n// Normaliza estrutura independente do que a IA retornar\nconst rg = parsed.revisao_gramatical || parsed;\nconst resumo = rg.resumo || {};\nconst slides = rg.slides || [];\n\nconst resumoNormalizado = {\n  total_slides_analisados: resumo.total_slides_analisados ?? slides.length ?? 0,\n  total_erros_encontrados: resumo.total_erros_encontrados ?? 0,\n  slides_com_erros: resumo.slides_com_erros ?? slides.filter(s => s.erros && s.erros.length > 0).length ?? 0,\n  slides_sem_erros: resumo.slides_sem_erros ?? slides.filter(s => !s.erros || s.erros.length === 0).length ?? 0\n};\n\nreturn [{\n  json: {\n    file_name: $('Google Drive Trigger').first().json.name,\n    file_id: $('Google Drive Trigger').first().json.id,\n    processed_at: new Date().toISOString(),\n    revisao: {\n      revisao_gramatical: {\n        documento: rg.documento || $('Google Drive Trigger').first().json.name,\n        resumo: resumoNormalizado,\n        slides: slides\n      }\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        112
+      ],
+      "id": "2298d49c-05e6-4324-b759-1481f43c6a7e",
+      "name": "Parsear Resposta"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "79732dc7-df62-497f-adc6-72940665ec1f",
+              "leftValue": "={{ $json.value }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -448,
+        -256
+      ],
+      "id": "4a9a0c58-7d90-4b39-9abe-b07bb325e973",
+      "name": "Lock Ativo?"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "lock_grid_revisao",
+        "value": "ativo",
+        "expire": true,
+        "ttl": 300
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        -240
+      ],
+      "id": "8ef01b37-9d26-41a3-9980-3969e40e8105",
+      "name": "Lock",
+      "credentials": {
+        "redis": {
+          "id": "Coloque sua credencial aqui",
+          "name": "Redis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "lock_grid_revisao"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        480,
+        112
+      ],
+      "id": "1db572d0-5f37-406e-b08f-cd10b649a74f",
+      "name": "UnLock",
+      "credentials": {
+        "redis": {
+          "id": "Coloque sua credencial aqui",
+          "name": "Redis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "lock_grid_revisao",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -592,
+        -256
+      ],
+      "id": "d0c85d62-3fbe-4c38-b81e-c83b8507193c",
+      "name": "CheckLock",
+      "credentials": {
+        "redis": {
+          "id": "Coloque sua credencial aqui",
+          "name": "Redis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -240,
+        112
+      ],
+      "id": "9b2a328d-3cf5-49ec-b863-108116188ad3",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "Coloque seu ID aqui",
+          "mode": "list",
+          "cachedResultName": "Revisor textual",
+          "cachedResultUrl": "https://www.notion.so/Coloque-seu-ID-aqui"
+        },
+        "title": "={{ $('Parsear Resposta').item.json.file_name }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Data de Processamento|date",
+              "date": "={{ $('Parsear Resposta').item.json.processed_at }}"
+            },
+            {
+              "key": "Total de Ajustes|number",
+              "numberValue": "={{ $('Parsear Resposta').item.json.revisao.revisao_gramatical.resumo.total_erros_encontrados }}"
+            },
+            {
+              "key": "Slides Analisados|number",
+              "numberValue": "={{ $('Parsear Resposta').item.json.revisao.revisao_gramatical.resumo.total_slides_analisados }}"
+            },
+            {
+              "key": "Slides com Ajustes|number",
+              "numberValue": "={{ $('Parsear Resposta').item.json.revisao.revisao_gramatical.resumo.slides_com_erros }}"
+            },
+            {
+              "key": "Arquivo do Drive|rich_text",
+              "textContent": "={{ $('Parsear Resposta').item.json.file_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        736,
+        112
+      ],
+      "id": "c6e3ac29-968e-448a-b15d-4f1eb42fd32f",
+      "name": "Criar Registro",
+      "credentials": {
+        "notionApi": {
+          "id": "Coloque sua credencial aqui",
+          "name": "Notion"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsear = $('Parsear Resposta').item.json;\nconst revisao = parsear.revisao.revisao_gramatical;\nconst pageId = $input.first().json.id;\n\nconst blocks = [];\n\n// Cabeçalho\nblocks.push({\n  type: \"heading_1\",\n  heading_1: {\n    rich_text: [{ type: \"text\", text: { content: \"📄 Relatório de Revisão Textual\" } }]\n  }\n});\n\n// Informações gerais\nblocks.push({\n  type: \"paragraph\",\n  paragraph: {\n    rich_text: [{ type: \"text\", text: { content: `📁 Arquivo: ${parsear.file_name}` } }]\n  }\n});\n\nblocks.push({\n  type: \"paragraph\",\n  paragraph: {\n    rich_text: [{ type: \"text\", text: { content: `📅 Processado em: ${new Date(parsear.processed_at).toLocaleString('pt-BR')}` } }]\n  }\n});\n\nblocks.push({\n  type: \"paragraph\",\n  paragraph: {\n    rich_text: [{ type: \"text\", text: { content: `📊 Slides analisados: ${revisao.resumo.total_slides_analisados} | Com ajustes: ${revisao.resumo.slides_com_erros} | Sem ajustes: ${revisao.resumo.slides_sem_erros}` } }]\n  }\n});\n\nblocks.push({ type: \"divider\", divider: {} });\n\n// Slides com erros\nconst slidesComErros = revisao.slides.filter(s => s.erros && s.erros.length > 0);\n\nif (slidesComErros.length === 0) {\n  blocks.push({\n    type: \"paragraph\",\n    paragraph: {\n      rich_text: [{ type: \"text\", text: { content: \"✅ Nenhum ajuste necessário. Documento aprovado!\" } }]\n    }\n  });\n} else {\n  for (const slide of slidesComErros) {\n    // Título do slide\n    blocks.push({\n      type: \"heading_2\",\n      heading_2: {\n        rich_text: [{ type: \"text\", text: { content: `🔖 Slide ${slide.slide}${slide.data ? ' — ' + slide.data : ''}` } }]\n      }\n    });\n\n    for (const erro of slide.erros) {\n      blocks.push({\n        type: \"callout\",\n        callout: {\n          rich_text: [{ type: \"text\", text: { content: `⚠️ ${erro.tipo_erro}` } }],\n          icon: { emoji: \"⚠️\" },\n          color: \"yellow_background\"\n        }\n      });\n\n      blocks.push({\n        type: \"paragraph\",\n        paragraph: {\n          rich_text: [\n            { type: \"text\", text: { content: \"Original:  \" }, annotations: { bold: true } },\n            { type: \"text\", text: { content: erro.texto_original } }\n          ]\n        }\n      });\n\n      blocks.push({\n        type: \"paragraph\",\n        paragraph: {\n          rich_text: [\n            { type: \"text\", text: { content: \"Correção:  \" }, annotations: { bold: true, color: \"green\" } },\n            { type: \"text\", text: { content: erro.correcao_sugerida } }\n          ]\n        }\n      });\n\n      blocks.push({\n        type: \"paragraph\",\n        paragraph: {\n          rich_text: [\n            { type: \"text\", text: { content: \"Explicação:  \" }, annotations: { bold: true } },\n            { type: \"text\", text: { content: erro.explicacao } }\n          ]\n        }\n      });\n\n      blocks.push({ type: \"divider\", divider: {} });\n    }\n  }\n}\n\nreturn [{ json: { pageId, blocks } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        112
+      ],
+      "id": "6cc3363f-aafa-4b29-b2c0-f9143ef52a14",
+      "name": "Formatar Página"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/blocks/{{ $('Formatar Página').item.json.pageId }}/children",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ children: $('Formatar Página').item.json.blocks }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1104,
+        112
+      ],
+      "id": "2fe63a42-d51f-4027-870a-0057b528322a",
+      "name": "HTTP Request",
+      "credentials": {
+        "notionApi": {
+          "id": "Coloque sua credencial aqui",
+          "name": "Notion"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Passos\n\n### 1 - Subir material para Google Drive.\n[**Link da automação**](https://drive.google.com/drive/folders/Coloque-seu-ID-aqui?usp=sharing)\n[**Link para subir materiais**](https://drive.google.com/drive/folders/Coloque-seu-ID-aqui?usp=sharing)\n#### Esta pasta é compartilhada por pessoa, o link dela não fica aberto.\n\n### 2 - Se possível, subir no máximo 2 em 2 arquivos.\n\n### 3 - Aguardar 1 minuto para o Agente fazer a análise\n\n### 4 - Verificar o resultado\n**Onde está o resultado?**\n[**Link do Notion**](https://www.notion.so/Coloque-seu-ID-aqui)\n",
+        "height": 448,
+        "width": 880,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -112,
+        -672
+      ],
+      "typeVersion": 1,
+      "id": "fc67fb80-20f8-44d5-b64d-a5b4fefc5b60",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Keys, Contas e MCPs em uso\n\nChave criada na conta do Claudio\n[**Anthropic**](https://console.anthropic.com/settings/keys)\n\nMCP Notion\n\nCredencial\n[**GDrive Oath**](https://console.cloud.google.com/apis/credentials?project=Coloque-seu-Projeto-aqui)",
+        "height": 240,
+        "width": 544,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -672,
+        -672
+      ],
+      "typeVersion": 1,
+      "id": "04ff9f81-94e3-41ed-b9d2-31ebc504f4e0",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Gatilho\n**Gatilho no GDrive**\nToda vez que uma pasta é modificada, o gatilho aciona e faz o download do(s) arquivos que foram atualizados no GDrive.",
+        "height": 320,
+        "width": 304
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -928,
+        -416
+      ],
+      "typeVersion": 1,
+      "id": "b55961ad-5357-4e1a-b8ca-20669ba067d9",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Criador de fila\n**Faz fila de execução**\nPara todo arquivo novo, é gerado um ID do Redis.\nSe 2 ou mais arquivos entrarem para execução, o primeiro ID passa, o workflow checa se tem mais IDs ativos e faz uma fila",
+        "height": 496,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -608,
+        -416
+      ],
+      "typeVersion": 1,
+      "id": "7c908b6c-e31e-4c2a-a321-4c78a1e4d7b8",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Criador de fila\n**Finaliza a fila**\nPara todo arquivo analizado, este node mata o ID do arquivo e libera a fila.",
+        "height": 480,
+        "width": 288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        384,
+        -208
+      ],
+      "typeVersion": 1,
+      "id": "81de53bf-a3bb-4c35-b23b-bd8f50e690eb",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Extrator de texto\n**Extrai texto das imagens**\n**Revisa Gramaticalmente**\n - Utiliza Anthropic para revisar o texto\n\n\n**Cria uma resposta Humanizada**",
+        "height": 480,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -112,
+        -208
+      ],
+      "typeVersion": 1,
+      "id": "6c62c7db-9fff-407b-9031-070bfbac1060",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Cria item na base\n**Responde**\nCria um item na base para informar o resultado da análise gramatical.",
+        "height": 480,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        688,
+        -208
+      ],
+      "typeVersion": 1,
+      "id": "062be14b-67d1-4765-aef5-eb3e2540825d",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## Cria página do item\n**Designer**\nCria uma página com os detalhes da revisão gramatical.",
+        "height": 480,
+        "width": 352
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        896,
+        -208
+      ],
+      "typeVersion": 1,
+      "id": "ce29992b-c4a0-449e-af08-a1dbf0c30908",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a7c91e6a-a0d0-4325-9495-e9875d3c1e73",
+              "leftValue": "={{ $('Parsear Resposta').item.json.revisao.revisao_gramatical.resumo.total_erros_encontrados }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1312,
+        112
+      ],
+      "id": "f54a2ed9-731d-4932-a635-2ea7f514c16c",
+      "name": "Tem erros?"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Criar Registro').item.json.id }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status|status",
+              "statusValue": "Ajustar"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -16
+      ],
+      "id": "d675e59f-fb7e-4dd7-bb26-658b1f66ba02",
+      "name": "Ajustar",
+      "credentials": {
+        "notionApi": {
+          "id": "Coloque sua credencial aqui",
+          "name": "Notion"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Criar Registro').item.json.id }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "=Status|status",
+              "statusValue": "=Aprovado"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        192
+      ],
+      "id": "422cdc26-2972-44d1-b343-73a6d31b9036",
+      "name": "Aprovado",
+      "credentials": {
+        "notionApi": {
+          "id": "Coloque sua credencial aqui",
+          "name": "Notion"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Drive Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Base64": {
+      "main": [
+        [
+          {
+            "node": "Revisão Gramatical",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revisão Gramatical": {
+      "main": [
+        [
+          {
+            "node": "Parsear Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download PDF": {
+      "main": [
+        [
+          {
+            "node": "CheckLock",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "CheckLock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Resposta": {
+      "main": [
+        [
+          {
+            "node": "UnLock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lock Ativo?": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lock": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        []
+      ]
+    },
+    "CheckLock": {
+      "main": [
+        [
+          {
+            "node": "Lock Ativo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Extrair Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UnLock": {
+      "main": [
+        [
+          {
+            "node": "Criar Registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Registro": {
+      "main": [
+        [
+          {
+            "node": "Formatar Página",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar Página": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Tem erros?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem erros?": {
+      "main": [
+        [
+          {
+            "node": "Ajustar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aprovado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "ba54a0d5-7246-4170-bb12-9d26c460c6b0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9a3e4b89fb7a84a2c09ed61c4131ce12c5389a1074fe65caaf249388a092edc2"
+  },
+  "id": "EVS2Pg3oyZTlpZFb",
+  "tags": [
+    {
+      "updatedAt": "2026-02-25T19:29:25.097Z",
+      "createdAt": "2026-02-25T19:29:25.097Z",
+      "id": "RWl1uHX6TbSii7kg",
+      "name": "GRID"
+    },
+    {
+      "updatedAt": "2026-02-25T19:29:25.093Z",
+      "createdAt": "2026-02-25T19:29:25.093Z",
+      "id": "2FvaGM9ujeU9SQfv",
+      "name": "Revisão"
+    },
+    {
+      "updatedAt": "2026-02-25T19:29:25.110Z",
+      "createdAt": "2026-02-25T19:29:25.110Z",
+      "id": "POCK1PWMSQWsn2zC",
+      "name": "PDFs"
+    }
+  ]
+}

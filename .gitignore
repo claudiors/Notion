@@ -1,4 +1,5 @@
 *.json
+!GRID - Revisão Gramatical de PDFs.json
 # Excluir binários e arquivos temporários
 node_modules/
 *.log
