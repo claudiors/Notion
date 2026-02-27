@@ -1,0 +1,4 @@
+*.json
+# Excluir binários e arquivos temporários
+node_modules/
+*.log
